@@ -69,6 +69,8 @@ class View(QWidget):
 
         self._trow_px_offset = 0
 
+        self._trigger_shift_state = VerticalMoveState()
+
     def set_ui_model(self, ui_model):
         self._ui_model = ui_model
         self._updater = ui_model.get_updater()
@@ -856,6 +858,46 @@ class View(QWidget):
             self._move_edit_cursor_trigger_index(trigger_index - 1)
             self._try_delete_selection()
 
+    def _update_trigger_shifting(self):
+        px_delta = self._trigger_shift_state.get_delta()
+        if px_delta == 0:
+            return
+
+        # Get column
+        selection = self._ui_model.get_selection()
+        location = selection.get_location()
+        cur_column = self._sheet_manager.get_column_at_location(location)
+        if not cur_column:
+            return
+
+        row_ts = location.get_row_ts()
+
+        if px_delta < 0:
+            # Delete
+            remove_ts = utils.get_tstamp_from_px(-px_delta, self._px_per_beat)
+
+            next_dist = self._sheet_manager.get_distance_to_next_trigger_from_selection()
+
+            # Handle trigger row removal
+            if next_dist == 0:
+                min_dist = tstamp.Tstamp(0, 1)
+                self._sheet_manager.shift_triggers_up(min_dist)
+                remove_ts -= min_dist
+                next_dist = self._sheet_manager.get_distance_to_next_trigger_from_selection()
+
+            # Shift
+            remove_ts = min(remove_ts, next_dist)
+            self._sheet_manager.shift_triggers_up(remove_ts)
+
+            # Prepare snapping
+            if remove_ts == next_dist:
+                self._trigger_shift_state.try_snap_delay()
+
+        else:
+            # Insert
+            add_ts = utils.get_tstamp_from_px(px_delta, self._px_per_beat)
+            self._sheet_manager.shift_triggers_down(add_ts)
+
     def event(self, ev):
         if ev.type() == QEvent.KeyPress and ev.key() in (Qt.Key_Tab, Qt.Key_Backtab):
             return self.keyPressEvent(ev) or False
@@ -926,6 +968,14 @@ class View(QWidget):
                 elif ev.key() == Qt.Key_0:
                     self._sheet_manager.set_column_width(0)
 
+        if ev.modifiers() == Qt.ShiftModifier:
+            if ev.key() == Qt.Key_Insert:
+                self._trigger_shift_state.press_down()
+                self._update_trigger_shifting()
+            elif ev.key() == Qt.Key_Delete:
+                self._trigger_shift_state.press_up()
+                self._update_trigger_shifting()
+
     def keyReleaseEvent(self, ev):
         if self._keyboard_mapper.process_typewriter_button_event(ev):
             return
@@ -933,14 +983,21 @@ class View(QWidget):
         if ev.isAutoRepeat():
             return
 
-        if ev.key() == Qt.Key_Up:
-            self._vertical_move_state.release_up()
-        elif ev.key() == Qt.Key_Down:
-            self._vertical_move_state.release_down()
-        elif ev.key() == Qt.Key_Left:
-            self._horizontal_move_state.release_left()
-        elif ev.key() == Qt.Key_Right:
-            self._horizontal_move_state.release_right()
+        if ev.modifiers() == Qt.NoModifier:
+            if ev.key() == Qt.Key_Up:
+                self._vertical_move_state.release_up()
+            elif ev.key() == Qt.Key_Down:
+                self._vertical_move_state.release_down()
+            elif ev.key() == Qt.Key_Left:
+                self._horizontal_move_state.release_left()
+            elif ev.key() == Qt.Key_Right:
+                self._horizontal_move_state.release_right()
+
+        if ev.modifiers() == Qt.ShiftModifier:
+            if ev.key() == Qt.Key_Insert:
+                self._trigger_shift_state.release_down()
+            elif ev.key() == Qt.Key_Delete:
+                self._trigger_shift_state.release_up()
 
     def resizeEvent(self, ev):
         max_visible_cols = utils.get_max_visible_cols(self.width(), self._col_width)
