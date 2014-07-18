@@ -72,8 +72,7 @@ class Column():
 
         self._trigger_rows[row_ts].insert(trigger_index, trigger)
 
-        raw_data = self._make_raw_data(self._trigger_rows)
-        self._store[self._get_key()] = raw_data
+        self._update_raw_data()
 
     def remove_trigger(self, row_ts, trigger_index):
         self._build_trigger_rows()
@@ -81,6 +80,57 @@ class Column():
 
         del self._trigger_rows[row_ts][trigger_index]
 
+        self._update_raw_data()
+
+    def shift_triggers_down(self, from_ts, add_ts):
+        self._build_trigger_rows()
+        assert add_ts >= 0
+
+        huge_ts = tstamp.Tstamp(2**64)
+        positions = self.get_trigger_row_positions_in_range(from_ts, huge_ts)
+        if not positions:
+            return False
+
+        positions = reversed(sorted(positions))
+
+        for row_ts in positions:
+            new_ts = row_ts + add_ts
+            assert new_ts not in self._trigger_rows
+            row = self._trigger_rows.pop(row_ts)
+            self._trigger_rows[new_ts] = row
+
+        self._update_raw_data()
+        return True
+
+    def get_distance_to_next_trigger(self, from_ts):
+        huge_ts = tstamp.Tstamp(2**64)
+        positions = self.get_trigger_row_positions_in_range(from_ts, huge_ts)
+        if not positions:
+            return huge_ts
+        return min(positions) - from_ts
+
+    def shift_triggers_up(self, from_ts, remove_ts):
+        self._build_trigger_rows()
+        assert remove_ts >= 0
+
+        huge_ts = tstamp.Tstamp(2**64)
+        positions = self.get_trigger_row_positions_in_range(from_ts, huge_ts)
+        if not positions:
+            return False
+
+        positions = sorted(positions)
+
+        for row_ts in positions:
+            new_ts = row_ts - remove_ts
+            row = self._trigger_rows.pop(row_ts)
+            if new_ts >= from_ts:
+                assert new_ts not in self._trigger_rows
+                self._trigger_rows[new_ts] = row
+
+        self._update_raw_data()
+        return True
+
+    def _update_raw_data(self):
         raw_data = self._make_raw_data(self._trigger_rows)
         self._store[self._get_key()] = raw_data
 
