@@ -160,6 +160,51 @@ class SheetManager():
             cur_column.remove_trigger(row_ts, index)
             self._on_column_update()
 
+    def shift_triggers_down(self, add_ts):
+        if not self.is_editing_enabled():
+            return
+
+        selection = self._ui_model.get_selection()
+        location = selection.get_location()
+        if not location:
+            return
+
+        cur_column = self.get_column_at_location(location)
+        if not cur_column:
+            return
+
+        row_ts = location.get_row_ts()
+        if cur_column.shift_triggers_down(row_ts, add_ts):
+            self._on_column_update()
+
+    def get_distance_to_next_trigger_from_selection(self):
+        selection = self._ui_model.get_selection()
+        location = selection.get_location()
+        if not location:
+            return
+
+        cur_column = self.get_column_at_location(location)
+        if not cur_column:
+            return tstamp.Tstamp(2**64)
+        return cur_column.get_distance_to_next_trigger(location.get_row_ts())
+
+    def shift_triggers_up(self, remove_ts):
+        if not self.is_editing_enabled():
+            return
+
+        selection = self._ui_model.get_selection()
+        location = selection.get_location()
+        if not location:
+            return
+
+        cur_column = self.get_column_at_location(location)
+        if not cur_column:
+            return
+
+        row_ts = location.get_row_ts()
+        if cur_column.shift_triggers_up(row_ts, remove_ts):
+            self._on_column_update()
+
     def _on_column_update(self):
         self._updater.signal_update(set(['signal_column']))
 
