@@ -871,32 +871,30 @@ class View(QWidget):
             return
 
         row_ts = location.get_row_ts()
+        add_ts = utils.get_tstamp_from_px(px_delta, self._px_per_beat)
 
         if px_delta < 0:
             # Delete
-            remove_ts = utils.get_tstamp_from_px(-px_delta, self._px_per_beat)
-
             next_dist = self._sheet_manager.get_distance_to_next_trigger_from_selection()
 
             # Handle trigger row removal
             if next_dist == 0:
                 min_dist = tstamp.Tstamp(0, 1)
-                self._sheet_manager.shift_triggers_up(min_dist)
-                remove_ts -= min_dist
+                self._sheet_manager.shift_triggers(-min_dist)
+                add_ts += min_dist
                 next_dist = self._sheet_manager.get_distance_to_next_trigger_from_selection()
 
             # Shift
-            remove_ts = min(remove_ts, next_dist)
-            self._sheet_manager.shift_triggers_up(remove_ts)
+            add_ts = max(add_ts, -next_dist)
+            self._sheet_manager.shift_triggers(add_ts)
 
             # Prepare snapping
-            if remove_ts == next_dist:
+            if add_ts == -next_dist:
                 self._trigger_shift_state.try_snap_delay()
 
         else:
             # Insert
-            add_ts = utils.get_tstamp_from_px(px_delta, self._px_per_beat)
-            self._sheet_manager.shift_triggers_down(add_ts)
+            self._sheet_manager.shift_triggers(add_ts)
 
     def event(self, ev):
         if ev.type() == QEvent.KeyPress and ev.key() in (Qt.Key_Tab, Qt.Key_Backtab):

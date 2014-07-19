@@ -82,22 +82,27 @@ class Column():
 
         self._update_raw_data()
 
-    def shift_triggers_down(self, from_ts, add_ts):
+    def shift_triggers(self, from_ts, add_ts):
+        if add_ts == 0:
+            return False
+
         self._build_trigger_rows()
-        assert add_ts >= 0
 
         huge_ts = tstamp.Tstamp(2**64)
         positions = self.get_trigger_row_positions_in_range(from_ts, huge_ts)
         if not positions:
             return False
 
-        positions = reversed(sorted(positions))
+        positions = sorted(positions)
+        if add_ts > 0:
+            positions = reversed(positions)
 
         for row_ts in positions:
             new_ts = row_ts + add_ts
-            assert new_ts not in self._trigger_rows
             row = self._trigger_rows.pop(row_ts)
-            self._trigger_rows[new_ts] = row
+            if new_ts >= from_ts:
+                assert new_ts not in self._trigger_rows
+                self._trigger_rows[new_ts] = row
 
         self._update_raw_data()
         return True
@@ -108,27 +113,6 @@ class Column():
         if not positions:
             return huge_ts
         return min(positions) - from_ts
-
-    def shift_triggers_up(self, from_ts, remove_ts):
-        self._build_trigger_rows()
-        assert remove_ts >= 0
-
-        huge_ts = tstamp.Tstamp(2**64)
-        positions = self.get_trigger_row_positions_in_range(from_ts, huge_ts)
-        if not positions:
-            return False
-
-        positions = sorted(positions)
-
-        for row_ts in positions:
-            new_ts = row_ts - remove_ts
-            row = self._trigger_rows.pop(row_ts)
-            if new_ts >= from_ts:
-                assert new_ts not in self._trigger_rows
-                self._trigger_rows[new_ts] = row
-
-        self._update_raw_data()
-        return True
 
     def _update_raw_data(self):
         raw_data = self._make_raw_data(self._trigger_rows)
